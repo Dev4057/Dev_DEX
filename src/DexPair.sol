@@ -71,6 +71,20 @@ contract DexPair is ERC20{
     }
 
 
+    /// @notice Mints LP tokens to the provider and updates the internal reserves.
+    function mint(address to) external {
+        // Find out how many tokens are actually sitting in the contract right now
+        uint256 balance0 = IERC20(token0).balanceOf(address(this));
+        uint256 balance1 = IERC20(token1).balanceOf(address(this));
+
+        // Update the internal reserves to match the physical balances!
+        _update(balance0, balance1);
+
+        // (In a production DEX, complex square root math dictates exactly how many 
+        // LP tokens to mint. For this test, we just issue a standard 1000 LP tokens).
+        _mint(to, 1000 * 1e18); 
+    }
+
     /// @notice The core trading function. Takes one token and gives the user the other.
     /// @param amount0Out The amount of token0 the user wants to take OUT of the pool.
     /// @param amount1Out The amount of token1 the user wants to take OUT of the pool

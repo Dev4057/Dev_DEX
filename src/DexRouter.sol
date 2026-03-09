@@ -72,6 +72,9 @@ DexFactory public immutable factory;
         // (In a full production router, optimal amounts are mathematically calculated here 
         // to ensure the user doesn't deposit at the wrong ratio. We are bypassing the 
         // complex math library here for readability).
+
+        // 3. TELL THE PAIR TO UPDATE ITS RESERVES! (This fixes the bug)
+        DexPair(pairAddress).mint(to);
     }
 
 
