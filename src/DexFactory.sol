@@ -8,8 +8,6 @@ import {DexPair} from "./DexPair.sol";
 /// @title DEX Factory Contract
 /// @notice Deploys new trading pairs and keeps a registry of all existing pools.
 
-
-
 contract DexFactory{
 
     //--- State Variables ---
@@ -35,8 +33,7 @@ contract DexFactory{
     event PairCreated(address indexed token0, address indexed token1, address pair, uint256 pairLength);
 
     function allPairsLength() external view returns (uint256){
-
-        returns allPairs.length;
+        return allPairs.length;
     }
     
     /// @notice Deploys a new DexPair contract for two tokens.
@@ -53,15 +50,12 @@ contract DexFactory{
         // a pool for TokenA/TokenB is the exact same pool as TokenB/TokenA.
 
 
-        (address token0, address token1)=tokenA<tokenB  ?(tokenA,tokenB): (tokenA, tokenB);
+        (address token0, address token1)=tokenA<tokenB  ?(tokenA,tokenB): (tokenB, tokenA);
         require(token0 != address(0), "DexFactory: ZERO_ADDRESS");
-
 
         // 2. Check if the pair already exists
         // We don't want to fragment liquidity by having two separate pools for the same tokens.
         require(getPair[token0][token1] == address(0), "DexFactory: PAIR_EXISTS");
-
-
 
         // 3. Deploy the new Pair contract
         // The `new` keyword deploys a fresh copy of the DexPair bytecode to the blockchain.
@@ -81,15 +75,9 @@ contract DexFactory{
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // Populating the reverse direction
         allPairs.push(pair);
-
-
-
         // 6. Announce the creation to the blockchain
         emit PairCreated(token0, token1, pair, allPairs.length);
-        
-
     }
-
 }
 
 
