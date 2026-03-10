@@ -7,8 +7,6 @@
 ## 🚀 Live Demo
 - **Network:** Sepolia Testnet
 - **Router Address:** `0x3433132188517D0BD03aB118a810038E2926c439`
-- **Frontend:** [Link to your Vercel/Netlify deployment once ready]
-
 ---
 
 ## ✨ Features
