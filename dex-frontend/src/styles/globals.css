@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* THIS IS THE MAGIC LINE: Forces Tailwind v4 to listen to your React button */
+@variant dark (&:where(.dark, .dark *));
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,6 +13,15 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+    
+  /* Added these two lines so the absolute edges of your screen change color too */
+  background-color: #F9F9F8;
+  transition: background-color 0.3s ease;
+}
+
+/* Base background for dark mode */
+html.dark body {
+  background-color: #0A0A0A;
 }
 
 a {

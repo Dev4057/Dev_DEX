@@ -84,12 +84,3 @@ This project was built for educational purposes. Feel free to fork it, submit PR
 MIT License - Copyright (c) 2026 Devang Gandhi
 
 ```
-
----
-
-### Tips for your GitHub Profile:
-1.  **Screenshots:** Take a high-quality screenshot of your finished UI and place it right under the main title. This makes people want to scroll down!
-2.  **The "Cast" Commands:** You can actually add a section in the README titled "CLI Interactions" and paste those `cast` commands we used to check balances. It shows you know how to use the command line, which is a huge "plus" for senior developers.
-
-
-```
