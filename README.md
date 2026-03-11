@@ -6,7 +6,7 @@
 
 ## 🚀 Live Demo
 - **Network:** Sepolia Testnet
-- **Router Address:** `0x3433132188517D0BD03aB118a810038E2926c439`
+- **Router Address:** `0x8757557C5dDb78E5b449B719dDEc1A30afFa9A6B`
 ---
 
 ## ✨ Features
@@ -66,7 +66,7 @@ npm run dev
 
 | Contract | Address |
 | --- | --- |
-| **DexRouter** | `0x3433132188517D0BD03aB118a810038E2926c439` |
+| **DexRouter** | `0x8757557C5dDb78E5b449B719dDEc1A30afFa9A6B` |
 | **DexFactory** | `0xe21bd00b203cf8fff4b77939e7424bd02af12881` |
 | **Mock Bitcoin (mBTC)** | `0x85b9fB95E90c94672BC5A7ba008c1AA5C5E00E24` |
 | **Mock Ethereum (mETH)** | `0x529f6A3503C9438CcA6dF89C2141a103Eb382f7b` |

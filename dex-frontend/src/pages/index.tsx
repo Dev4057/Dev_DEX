@@ -1,18 +1,24 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { 
+  useAccount, 
+  useReadContract, 
+  useWriteContract, 
+  useWaitForTransactionReceipt,
+  useBalance 
+} from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { MBTC_ADDRESS, METH_ADDRESS, ROUTER_ADDRESS, ERC20_ABI, ROUTER_ABI } from '../constants/contracts';
 
 export default function Home() {
   const { address, isConnected } = useAccount();
-  const { data: hash, writeContractAsync } = useWriteContract();
+  const { data: hash, writeContractAsync, isPending: isSending } = useWriteContract();
 
   // --- STATE ---
   const [payAmount, setPayAmount] = useState('');
-  const [isSwapped, setIsSwapped] = useState(false); // false: BTC->ETH, true: ETH->BTC
+  const [isSwapped, setIsSwapped] = useState(false); 
   const [isProcessing, setIsProcessing] = useState(false);
 
   // --- DYNAMIC DATA ---
@@ -21,78 +27,72 @@ export default function Home() {
   const tokenInSymbol = isSwapped ? 'mETH' : 'mBTC';
   const tokenOutSymbol = isSwapped ? 'mBTC' : 'mETH';
 
-  // --- AUTOMATIC BALANCE REFRESH (Every 2 Seconds) ---
-  const { data: btcBalance, refetch: refetchBtc } = useReadContract({
-    address: MBTC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { refetchInterval: 2000 } // <--- Force UI refresh
+  // --- 1. IMPROVED BALANCE FETCHING ---
+  // We use useBalance because it's optimized for UI refreshes
+  const { data: btcBalance, refetch: refetchBtc } = useBalance({
+    address,
+    token: MBTC_ADDRESS,
+    query: { enabled: !!address, refetchInterval: 3000 }
   });
 
-  const { data: ethBalance, refetch: refetchEth } = useReadContract({
-    address: METH_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { refetchInterval: 2000 } // <--- Force UI refresh
+  const { data: ethBalance, refetch: refetchEth } = useBalance({
+    address,
+    token: METH_ADDRESS,
+    query: { enabled: !!address, refetchInterval: 3000 }
   });
 
-  const format = (data: any) => data ? Number(formatUnits(data, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0.00";
-  
-  const displayPayBalance = isSwapped ? format(ethBalance) : format(btcBalance);
-  const displayReceiveBalance = isSwapped ? format(btcBalance) : format(ethBalance);
+  // --- 2. THE "GHOST" FIX: WAIT FOR RECEIPT ---
+  // This hook watches the blockchain for the specific transaction hash
+  const { isLoading: isWaitingForBlock, isSuccess: txSuccess } = useWaitForTransactionReceipt({ 
+    hash,
+    confirmations: 1 // Wait for at least 1 block confirmation
+  });
 
-  // --- WATCH FOR SUCCESS ---
-  const { isLoading: isWaitingForBlock } = useWaitForTransactionReceipt({ hash });
+  // --- 3. THE "CHAIN REACTION" ---
+  // When the transaction is successful on-chain, FORCE the balances to update immediately
+  useEffect(() => {
+    if (txSuccess) {
+      console.log("Transaction confirmed! Refetching balances...");
+      refetchBtc();
+      refetchEth();
+      setPayAmount('');
+      setIsProcessing(false);
+    }
+  }, [txSuccess, refetchBtc, refetchEth]);
 
-  // --- LOGIC ---
+  const displayPayBalance = isSwapped ? ethBalance?.formatted : btcBalance?.formatted;
+  const displayReceiveBalance = isSwapped ? btcBalance?.formatted : ethBalance?.formatted;
+
   const handleToggle = () => {
     setIsSwapped(!isSwapped);
     setPayAmount('');
   };
-const handleSwap = async () => {
-    if (!payAmount || isNaN(Number(payAmount)) || Number(payAmount) <= 0) {
-      console.log("Invalid amount entered");
-      return;
-    }
+
+  const handleSwap = async () => {
+    if (!payAmount || isNaN(Number(payAmount)) || Number(payAmount) <= 0) return;
     
     try {
       setIsProcessing(true);
-      console.log("--- Starting Swap Sequence ---");
-      
-      // 1. Convert to BigInt Wei
       const amountInWei = parseUnits(payAmount, 18);
-      console.log("Amount in Wei:", amountInWei.toString());
-
-      // 2. Set a 20-minute deadline
+      
+      // FIXED: Deadline must be in SECONDS (Math.floor / 1000)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
 
-      // 3. Trigger the Contract Write
-      console.log("Sending transaction to wallet...");
-      const tx = await writeContractAsync({
+      await writeContractAsync({
         address: ROUTER_ADDRESS,
         abi: ROUTER_ABI,
         functionName: 'swapExactTokensForTokens',
         args: [
           amountInWei, 
-          BigInt(0), // Min amount out (0 for testing)
+          BigInt(0), // amountOutMin: 0 for testing to avoid slippage reverts
           tokenIn, 
           tokenOut, 
           address as `0x${string}`, 
           deadline
         ],
       });
-
-      console.log("Transaction Hash received:", tx);
-      setPayAmount('');
-      
-    } catch (e: any) {
-      console.error("CRITICAL ERROR DURING SWAP:");
-      console.error("Error Message:", e.message);
-      // This will tell us if it's a 'User Rejected', 'Insufficient Funds', or 'Contract Revert'
-      alert(`Error: ${e.shortMessage || "Check console for details"}`);
-    } finally {
+    } catch (e) {
+      console.error("Swap error:", e);
       setIsProcessing(false);
     }
   };
@@ -104,32 +104,23 @@ const handleSwap = async () => {
           <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
             <div className="w-2 h-2 bg-white rounded-full"></div>
           </div>
-          <h1 className="text-xl font-bold tracking-tight">Dev_dex</h1>
+          <h1 className="text-xl font-bold tracking-tight">Dev_DEX</h1>
         </div>
         <ConnectButton accountStatus="avatar" showBalance={false} />
       </header>
 
       <main className="flex flex-col items-center justify-center pt-24 px-4">
-        <div className="w-full max-w-[440px] bg-white rounded-[2.5rem] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[#F2F2F2]">
-          
-          <div className="px-4 py-2 mb-2 flex justify-between items-center">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-[#A0A0A0]">Swap</h2>
-          </div>
+        <div className="w-full max-w-[440px] bg-white rounded-[2.5rem] p-3 shadow-sm border border-[#F2F2F2]">
+          <div className="px-4 py-2 mb-2"><h2 className="text-xs font-bold uppercase text-[#A0A0A0]">Swap</h2></div>
 
           {/* INPUT PAY */}
-          <div className="bg-[#F9F9F8] rounded-[2rem] p-5 mb-1.5 border border-transparent focus-within:border-[#EAEAEA] transition-all">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-xs font-semibold text-[#7D7D7D] uppercase">You pay</span>
-              <span className="text-xs text-[#A0A0A0]">Balance: {displayPayBalance}</span>
+          <div className="bg-[#F9F9F8] rounded-[2rem] p-5 mb-1.5 border border-transparent focus-within:border-[#EAEAEA]">
+            <div className="flex justify-between mb-4 text-xs font-semibold text-[#7D7D7D]">
+              <span>YOU PAY</span>
+              <span>BALANCE: {displayPayBalance || "0.00"}</span>
             </div>
             <div className="flex justify-between items-center gap-4">
-              <input 
-                type="text" 
-                placeholder="0" 
-                value={payAmount} 
-                onChange={(e) => setPayAmount(e.target.value)} 
-                className="bg-transparent text-4xl outline-none w-full font-medium placeholder:text-[#D4D4D4]" 
-              />
+              <input type="text" placeholder="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className="bg-transparent text-4xl outline-none w-full font-medium" />
               <div className="bg-white px-4 py-2 rounded-2xl shadow-sm font-bold flex items-center gap-2 border border-[#EBEBEB]">
                 <span className={isSwapped ? "text-blue-500" : "text-orange-500"}>{isSwapped ? "Ξ" : "₿"}</span>
                 {tokenInSymbol}
@@ -137,30 +128,18 @@ const handleSwap = async () => {
             </div>
           </div>
 
-          {/* TOGGLE */}
           <div className="flex justify-center -my-5 relative z-10">
-            <button 
-              onClick={handleToggle} 
-              className="bg-white p-3 rounded-2xl border border-[#EBEBEB] shadow-sm hover:shadow-md hover:scale-110 active:scale-95 transition-all duration-300 text-[#1C1C1C]"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10l5 5 5-5M7 14l5-5 5 5"/></svg>
-            </button>
+            <button onClick={handleToggle} className="bg-white p-3 rounded-2xl border border-[#EBEBEB] shadow-sm hover:rotate-180 transition-all duration-500"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M7 10l5 5 5-5M7 14l5-5 5 5"/></svg></button>
           </div>
 
           {/* INPUT RECEIVE */}
-          <div className="bg-[#F9F9F8] rounded-[2rem] p-5 mt-1.5 border border-transparent focus-within:border-[#EAEAEA] transition-all">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-xs font-semibold text-[#7D7D7D] uppercase">You receive</span>
-              <span className="text-xs text-[#A0A0A0]">Balance: {displayReceiveBalance}</span>
+          <div className="bg-[#F9F9F8] rounded-[2rem] p-5 mt-1.5 border border-transparent">
+            <div className="flex justify-between mb-4 text-xs font-semibold text-[#7D7D7D]">
+              <span>YOU RECEIVE</span>
+              <span>BALANCE: {displayReceiveBalance || "0.00"}</span>
             </div>
             <div className="flex justify-between items-center gap-4">
-              <input 
-                type="text" 
-                placeholder="0" 
-                value={payAmount} 
-                readOnly 
-                className="bg-transparent text-4xl outline-none w-full font-medium opacity-40" 
-              />
+              <input type="text" placeholder="0" value={payAmount} readOnly className="bg-transparent text-4xl outline-none w-full font-medium opacity-40" />
               <div className="bg-white px-4 py-2 rounded-2xl shadow-sm font-bold flex items-center gap-2 border border-[#EBEBEB]">
                 <span className={!isSwapped ? "text-blue-500" : "text-orange-500"}>{!isSwapped ? "Ξ" : "₿"}</span>
                 {tokenOutSymbol}
@@ -168,26 +147,17 @@ const handleSwap = async () => {
             </div>
           </div>
 
-          {/* SWAP BUTTON */}
           <button 
             onClick={handleSwap} 
             disabled={isProcessing || isWaitingForBlock || !payAmount || !isConnected} 
-            className={`w-full text-white rounded-[1.5rem] py-5 mt-3 font-bold text-lg transition-all shadow-lg shadow-black/5
-              ${(!isConnected || !payAmount) ? "bg-[#EAEAEA] text-[#A0A0A0] cursor-not-allowed shadow-none" : 
-                (isProcessing || isWaitingForBlock) ? "bg-[#4D4D4D] cursor-wait" : 
-                "bg-[#1C1C1C] hover:bg-black active:scale-[0.98]"}
+            className={`w-full text-white rounded-[1.5rem] py-5 mt-3 font-bold text-lg transition-all
+              ${(!isConnected || !payAmount) ? "bg-[#EAEAEA] text-[#A0A0A0]" : 
+                (isProcessing || isWaitingForBlock) ? "bg-[#4D4D4D] cursor-wait" : "bg-[#1C1C1C] hover:bg-black"}
             `}
           >
             {!isConnected ? "Connect Wallet" : 
-             (isProcessing || isWaitingForBlock) ? "Confirming on Sepolia..." : 
-             "Swap Tokens"}
+             (isProcessing || isWaitingForBlock) ? "Updating Blockchain..." : "Swap Tokens"}
           </button>
-        </div>
-        
-        {/* NETWORK STATUS FOOTER */}
-        <div className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#D4D4D4]">
-          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-          Sepolia Testnet Active
         </div>
       </main>
     </div>
